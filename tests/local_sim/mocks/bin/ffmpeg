@@ -1,0 +1,9 @@
+#!/bin/bash
+# Fake ffmpeg: copy the -i input to the last argument (conversion pass-through)
+src=""; last=""
+while [ $# -gt 0 ]; do
+  if [ "$1" = "-i" ]; then src="$2"; shift 2; continue; fi
+  last="$1"; shift
+done
+[ -n "$src" ] && [ -n "$last" ] && [ "$src" != "$last" ] && cp "$src" "$last"
+exit 0

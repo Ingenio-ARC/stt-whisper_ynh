@@ -1,0 +1,20 @@
+[Unit]
+Description=stt-whisper STT Whisper service
+After=network.target
+
+[Service]
+Type=simple
+User=stt-whisper
+Group=stt-whisper
+WorkingDirectory=/var/www/stt-whisper/app
+ExecStart=/var/www/stt-whisper/venv/bin/uvicorn main:app --host 127.0.0.1 --port 9800 --proxy-headers
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=CONFIG_PATH=/var/www/stt-whisper/config.yml
+Environment=LD_LIBRARY_PATH=/var/www/stt-whisper/whisper
+StandardOutput=append:/var/log/stt-whisper/app.log
+StandardError=append:/var/log/stt-whisper/app.log
+
+[Install]
+WantedBy=multi-user.target

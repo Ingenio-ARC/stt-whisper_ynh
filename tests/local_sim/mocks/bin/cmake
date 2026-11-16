@@ -1,0 +1,10 @@
+#!/bin/bash
+bdir=""; prev=""
+for a in "$@"; do
+  [ "$prev" = "-B" ] && bdir="$a"
+  prev="$a"
+done
+if [ -n "$bdir" ]; then
+  "$(dirname "$0")/whisper_stubs" "$bdir/bin/whisper-cli"
+fi
+exit 0

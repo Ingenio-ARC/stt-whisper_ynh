@@ -1,0 +1,23 @@
+#!/bin/bash
+# internal generator used by fake cmake to create a fake whisper-cli
+mkdir -p "$(dirname "$1")"
+cat > "$1" <<'INNER'
+#!/bin/bash
+# Fake whisper-cli: accept whisper.cpp args, write canned transcript next to -f file
+file_arg=""
+out_txt=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -f) file_arg="$2"; shift 2 ;;
+    --output-txt) out_txt=true; shift ;;
+    -m|-l|-t|-bs|-of|LANG) shift 2 ;;
+    --no-timestamps|-tr|-nt|--print-colors|-pc|-oj|-s|-ml) shift ;;
+    *) shift ;;
+  esac
+done
+if [ -n "$file_arg" ] && [ "$out_txt" = "true" ]; then
+  printf 'And so my fellow Americans ask not what your country can do for you ask what you can do for your country\n' > "$file_arg.txt"
+fi
+exit 0
+INNER
+chmod +x "$1"

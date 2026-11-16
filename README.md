@@ -75,3 +75,14 @@ La respuesta es el texto transcrito, lista para inyectar en el prompt de la IA.
 ## Licencia
 
 MIT
+
+## Simulación local (sin YunoHost)
+
+`tests/local_sim/` incluye un harness para probar la app sin Yunohost ni root:
+
+```bash
+bash tests/local_sim/sim_install.sh   # instala en ~/../stt-whisper.sim con helpers ynh_* simulados
+bash tests/local_sim/sim_e2e.sh       # levanta el microservicio real y prueba /health, /transcribe, /transcribe/plain, 403
+```
+
+Los binarios pesados se simulan con stubs (ffmpeg copia el audio, `whisper-cli` falso produce transcript conocido, cmake genera el binario, curl finge el modelo, git finge el clone, venv/pip se simulan). Valida: flujo del script install, render de plantillas (`ynh_add_config`), endpoints, seguridad IP/API key y ciclo de archivos temporales. No valida: compilación real de whisper.cpp (usa build CMake real en el server), inferencia real, systemd/nginx ni resources de Yunohost — esos se prueban con el upgrade real o con package_check/VM de YunoHost.

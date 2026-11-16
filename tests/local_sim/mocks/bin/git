@@ -1,0 +1,8 @@
+#!/bin/bash
+if [ "$1" = "clone" ]; then
+  d="${@: -1}"
+  mkdir -p "$d"
+  echo "8a9ad78" > "$d/HEAD_MARKER"
+  exit 0
+fi
+exec /usr/bin/git "$@"

@@ -1,0 +1,11 @@
+#!/bin/bash
+if [ "$1" = "-m" ] && [ "$2" = "venv" ] && [ -n "$3" ]; then
+  mkdir -p "$3/bin"
+  cat > "$3/bin/pip" <<'P'
+#!/bin/bash
+exit 0
+P
+  chmod +x "$3/bin/pip"
+  exit 0
+fi
+exec /usr/bin/python3 "$@"

@@ -1,0 +1,10 @@
+#!/bin/bash
+# Fake curl: for model downloads (-o FILE), create a non-empty placeholder
+out=""
+prev=""
+for a in "$@"; do
+  [ "$prev" = "-o" ] && out="$a"
+  prev="$a"
+done
+if [ -n "$out" ]; then echo "fake-model" > "$out"; exit 0; fi
+exec /usr/bin/curl "$@"
