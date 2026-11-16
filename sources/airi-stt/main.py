@@ -50,7 +50,7 @@ def check_security(request: Request):
         logger.warning("Rejected request from IP %s", ip)
         raise HTTPException(status_code=403, detail=f"IP not allowed: {ip}")
 
-    key = request.headers.get("x-api-key")
+    key = request.headers.get("x-api-key") or request.headers.get("airi_stt_api_key")
     auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
         key = auth.split(" ", 1)[1].strip()
