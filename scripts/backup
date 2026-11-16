@@ -1,0 +1,16 @@
+#!/bin/bash
+
+source /usr/share/yunohost/helpers
+
+ynh_abort_if_errors
+
+app=$YNH_APP_INSTANCE_NAME
+domain=$(ynh_app_setting_get --app=$app --key=domain)
+
+ynh_print_info --message="Backing up STT Whisper..."
+
+ynh_backup --src_path="/var/www/$app"
+ynh_backup --src_path="/var/cache/$app"
+ynh_backup --src_path="/var/log/$app"
+ynh_backup --src_path="/etc/systemd/system/$app.service"
+ynh_backup --src_path="/etc/nginx/conf.d/$domain.d/$app.conf"

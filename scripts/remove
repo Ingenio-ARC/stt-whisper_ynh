@@ -1,0 +1,21 @@
+#!/bin/bash
+
+source /usr/share/yunohost/helpers
+
+ynh_abort_if_errors
+
+app=$YNH_APP_INSTANCE_NAME
+domain=$(ynh_app_setting_get --app=$app --key=domain)
+
+ynh_script_progression --message="Removing system configurations..." --weight=1
+
+ynh_remove_systemd_config
+ynh_remove_nginx_config
+
+ynh_script_progression --message="Removing files..." --weight=1
+
+ynh_safe_rm "/var/www/$app"
+ynh_safe_rm "/var/cache/$app"
+ynh_safe_rm "/var/log/$app"
+
+ynh_script_progression --message="Removal of $app completed" --weight=1

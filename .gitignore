@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+venv/
+.venv/
+
+# Entornos y secretos
+.env
+.env.*
+
+# Config generada en producción (la plantilla vive en conf/)
+/config.yml
+
+# Modelos, binarios y compilados de whisper.cpp
+*.bin
+models/
+whisper/
+
+# Audios generales (los de tests de referencia se re-incluyen)
+*.wav
+*.mp3
+*.ogg
+*.m4a
+*.webm
+*.flac
+!sources/airi-stt/tests/samples/*.wav
+!sources/airi-stt/tests/samples/*.mp3
+!sources/airi-stt/tests/samples/*.ogg
+!sources/airi-stt/tests/samples/*.m4a
+!sources/airi-stt/tests/samples/*.webm
+!sources/airi-stt/tests/samples/*.flac
+
+# Logs, paquetes y temporales
+*.log
+*.zip
+*.tar.gz
+
+# Sistema
+.DS_Store
+Thumbs.db

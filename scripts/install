@@ -1,0 +1,157 @@
+#!/bin/bash
+
+source /usr/share/yunohost/helpers
+
+ynh_abort_if_errors
+
+#=================================================
+# RETRIEVE ARGUMENTS
+#=================================================
+
+app=$YNH_APP_INSTANCE_NAME
+domain=$YNH_APP_ARG_DOMAIN
+path=$YNH_APP_ARG_PATH
+path=${path%/}
+is_public=$YNH_APP_ARG_IS_PUBLIC
+allowed_ips=$YNH_APP_ARG_ALLOWED_IPS
+api_key=$YNH_APP_ARG_API_KEY
+model=$YNH_APP_ARG_MODEL
+language=$YNH_APP_ARG_LANGUAGE
+
+#=================================================
+# SET VARIABLES
+#=================================================
+
+install_dir=$(ynh_app_setting_get --app=$app --key=install_dir)
+port=$(ynh_app_setting_get --app=$app --key=port)
+
+max_file_size_mb=25
+threads=4
+beam_size=5
+host="127.0.0.1"
+
+if [ -z "$api_key" ]; then
+    api_key=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+fi
+
+case "$model" in
+    tiny) model_file="ggml-tiny.bin" ;;
+    base) model_file="ggml-base.bin" ;;
+    small) model_file="ggml-small.bin" ;;
+    medium) model_file="ggml-medium.bin" ;;
+    *) model_file="ggml-base.bin" ;;
+esac
+
+#=================================================
+# CREATE DIRECTORIES
+#=================================================
+
+ynh_script_progression --message="Creating directories..." --weight=1
+
+mkdir -p "$install_dir/app"
+mkdir -p "$install_dir/whisper"
+mkdir -p "$install_dir/models"
+mkdir -p "/var/cache/$app"
+mkdir -p "/var/log/$app"
+
+#=================================================
+# SET UP SOURCE FILES
+#=================================================
+
+ynh_script_progression --message="Setting up source files..." --weight=1
+
+cp -a "$YNH_APP_BASEDIR/sources/airi-stt/." "$install_dir/app/"
+
+#=================================================
+# COMPILE WHISPER.CPP
+#=================================================
+
+ynh_script_progression --message="Compiling whisper.cpp (this may take a few minutes)..." --weight=15
+
+tmp_whisper=$(mktemp -d)
+git clone --depth 1 --branch v1.7.4 https://github.com/ggerganov/whisper.cpp.git "$tmp_whisper"
+cd "$tmp_whisper"
+make -j$(nproc) main
+cp main "$install_dir/whisper/main"
+cd /
+rm -rf "$tmp_whisper"
+
+#=================================================
+# DOWNLOAD MODEL
+#=================================================
+
+ynh_script_progression --message="Downloading Whisper model..." --weight=10
+
+model_url="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$model_file"
+curl -L --retry 5 --retry-delay 5 -o "$install_dir/models/$model_file" "$model_url"
+
+if [ ! -s "$install_dir/models/$model_file" ]; then
+    ynh_die --message="Model download failed: $model_file"
+fi
+
+#=================================================
+# INSTALL PYTHON DEPENDENCIES
+#=================================================
+
+ynh_script_progression --message="Installing Python dependencies..." --weight=5
+
+python3 -m venv "$install_dir/venv"
+"$install_dir/venv/bin/pip" install --upgrade pip
+"$install_dir/venv/bin/pip" install -r "$install_dir/app/requirements.txt"
+
+#=================================================
+# CONFIGURE APP
+#=================================================
+
+ynh_script_progression --message="Configuring application..." --weight=1
+
+ynh_add_config --template="config.yml" --destination="$install_dir/config.yml"
+chmod 600 "$install_dir/config.yml"
+
+#=================================================
+# SYSTEM CONFIGURATION
+#=================================================
+
+ynh_script_progression --message="Configuring system..." --weight=1
+
+ynh_add_nginx_config
+ynh_add_systemd_config
+
+#=================================================
+# START SERVICE
+#=================================================
+
+ynh_script_progression --message="Starting service..." --weight=2
+
+ynh_systemd_action --service_name=$app --action="start" --line_match="Application startup complete" --log_path="/var/log/$app/app.log" --timeout=60
+
+#=================================================
+# SET PERMISSIONS
+#=================================================
+
+ynh_script_progression --message="Setting permissions..." --weight=1
+
+chown -R $app:$app "$install_dir"
+chown -R $app:$app "/var/cache/$app"
+chown -R $app:$app "/var/log/$app"
+
+if [ "$is_public" -eq 1 ]; then
+    ynh_permission_update --permission="main" --add="visitors"
+else
+    ynh_permission_update --permission="main" --add="all_users"
+fi
+
+#=================================================
+# END OF SCRIPT
+#=================================================
+
+ynh_script_progression --message="Installation of $app completed" --weight=1
+
+echo ""
+echo "=================================================="
+echo " STT Whisper instalado"
+echo " URL:        https://$domain$path"
+echo " API key:    $api_key"
+echo " Modelo:     $model_file"
+echo " IPs:        $allowed_ips"
+echo "=================================================="

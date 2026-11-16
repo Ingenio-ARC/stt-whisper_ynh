@@ -1,0 +1,19 @@
+[Unit]
+Description=__APP__ STT Whisper service
+After=network.target
+
+[Service]
+Type=simple
+User=__APP__
+Group=__APP__
+WorkingDirectory=/var/www/__APP__/app
+ExecStart=/var/www/__APP__/venv/bin/uvicorn main:app --host __HOST__ --port __PORT__ --proxy-headers
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=CONFIG_PATH=/var/www/__APP__/config.yml
+StandardOutput=append:/var/log/__APP__/app.log
+StandardError=append:/var/log/__APP__/app.log
+
+[Install]
+WantedBy=multi-user.target

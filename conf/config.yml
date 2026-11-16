@@ -1,0 +1,21 @@
+app:
+  port: __PORT__
+  host: "127.0.0.1"
+  max_file_size_mb: __MAX_FILE_SIZE_MB__
+  log_level: info
+  temp_dir: "/var/cache/__APP__"
+  workers: 1
+
+security:
+  api_key: "__API_KEY__"
+  allowed_ips: "__ALLOWED_IPS__"
+
+whisper:
+  binary_path: "/var/www/__APP__/whisper/main"
+  model_path: "/var/www/__APP__/models/__MODEL_FILE__"
+  language: "__LANGUAGE__"
+  threads: __THREADS__
+  beam_size: __BEAM_SIZE__
+
+preprocessing:
+  denoise: false

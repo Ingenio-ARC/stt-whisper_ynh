@@ -1,0 +1,77 @@
+packaging_format = 2
+
+id = "stt-whisper"
+name = "STT Whisper"
+description.en = "Speech-to-text endpoint using Whisper.cpp"
+description.es = "Endpoint de audio a texto usando Whisper.cpp"
+version = "1.0~ynh1"
+
+maintainers = ["Airi Team"]
+
+upstream.license = "MIT"
+upstream.website = "https://github.com/Ingenio-ARC/STT-WHISPER"
+
+code = "https://github.com/Ingenio-ARC/STT-WHISPER"
+license = "MIT"
+
+[integration]
+yunohost = ">= 11.0"
+architectures = "all"
+multi_instance = false
+ldap = "not_relevant"
+sso = "not_relevant"
+disk = "50M"
+ram.build = "50M"
+ram.runtime = "50M"
+
+[install]
+    [install.domain]
+    type = "domain"
+
+    [install.path]
+    type = "path"
+    default = "/stt"
+
+    [install.is_public]
+    ask.en = "Should this app be publicly reachable? (Recommended: yes, because access is enforced by IP whitelist + API key; YunoHost SSO would block N8N otherwise.)"
+    ask.es = "¿Debería esta app ser alcanzable públicamente? (Recomendado: sí, porque el acceso está protegido por whitelist de IPs + API key; el SSO de YunoHost bloquearía a N8N en caso contrario.)"
+    type = "boolean"
+    default = true
+
+    [install.allowed_ips]
+    ask.en = "Comma-separated list of allowed IP addresses"
+    ask.es = "Lista de IPs permitidas separadas por comas"
+    type = "string"
+    default = "127.0.0.1,::1,179.60.190.114"
+
+    [install.api_key]
+    ask.en = "API key for the STT endpoint (leave empty to auto-generate a secure key)"
+    ask.es = "API key para el endpoint STT (dejar vacío para generar una key segura)"
+    type = "string"
+    default = ""
+
+    [install.model]
+    ask.en = "Whisper model to download"
+    ask.es = "Modelo de Whisper a descargar"
+    type = "select"
+    choices = ["tiny", "base", "small", "medium"]
+    default = "base"
+
+    [install.language]
+    ask.en = "Default language code (auto for automatic detection)"
+    ask.es = "Código de idioma por defecto (auto para detección automática)"
+    type = "string"
+    default = "auto"
+
+[resources]
+    [resources.system_user]
+
+    [resources.install_dir]
+
+    [resources.port]
+
+    [resources.apt]
+    packages = ["ffmpeg", "python3-venv", "python3-pip", "build-essential", "git"]
+
+    [resources.permissions]
+    main.url = "/"

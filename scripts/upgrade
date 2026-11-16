@@ -1,0 +1,68 @@
+#!/bin/bash
+
+source /usr/share/yunohost/helpers
+
+ynh_abort_if_errors
+
+app=$YNH_APP_INSTANCE_NAME
+domain=$(ynh_app_setting_get --app=$app --key=domain)
+path=$(ynh_app_setting_get --app=$app --key=path)
+path=${path%/}
+
+install_dir=$(ynh_app_setting_get --app=$app --key=install_dir)
+port=$(ynh_app_setting_get --app=$app --key=port)
+
+allowed_ips=$(ynh_app_setting_get --app=$app --key=allowed_ips)
+api_key=$(ynh_app_setting_get --app=$app --key=api_key)
+model=$(ynh_app_setting_get --app=$app --key=model)
+language=$(ynh_app_setting_get --app=$app --key=language)
+is_public=$(ynh_app_setting_get --app=$app --key=is_public)
+
+max_file_size_mb=25
+threads=4
+beam_size=5
+host="127.0.0.1"
+
+if [ -z "$api_key" ]; then
+    api_key=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+    ynh_app_setting_set --app=$app --key=api_key --value=$api_key
+fi
+
+case "$model" in
+    tiny) model_file="ggml-tiny.bin" ;;
+    base) model_file="ggml-base.bin" ;;
+    small) model_file="ggml-small.bin" ;;
+    medium) model_file="ggml-medium.bin" ;;
+    *) model_file="ggml-base.bin" ;;
+esac
+
+ynh_script_progression --message="Stopping service..." --weight=1
+ynh_systemd_action --service_name=$app --action="stop"
+
+ynh_script_progression --message="Upgrading source files..." --weight=1
+cp -a "$YNH_APP_BASEDIR/sources/airi-stt/." "$install_dir/app/"
+
+ynh_script_progression --message="Upgrading Python dependencies..." --weight=3
+"$install_dir/venv/bin/pip" install --upgrade pip
+"$install_dir/venv/bin/pip" install -r "$install_dir/app/requirements.txt"
+
+ynh_script_progression --message="Updating configuration..." --weight=1
+ynh_add_config --template="config.yml" --destination="$install_dir/config.yml"
+chmod 600 "$install_dir/config.yml"
+
+ynh_script_progression --message="Updating system configuration..." --weight=1
+ynh_add_nginx_config
+ynh_add_systemd_config
+
+ynh_script_progression --message="Starting service..." --weight=2
+ynh_systemd_action --service_name=$app --action="start" --line_match="Application startup complete" --log_path="/var/log/$app/app.log" --timeout=60
+
+chown -R $app:$app "$install_dir"
+
+if [ "$is_public" -eq 1 ]; then
+    ynh_permission_update --permission="main" --add="visitors"
+else
+    ynh_permission_update --permission="main" --add="all_users"
+fi
+
+ynh_script_progression --message="Upgrade of $app completed" --weight=1
