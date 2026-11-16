@@ -12,6 +12,11 @@ path=${path%/}
 install_dir=$(ynh_app_setting_get --app=$app --key=install_dir)
 port=$(ynh_app_setting_get --app=$app --key=port)
 
+if [ -z "$port" ]; then
+    port=$(ynh_find_port --port=9800)
+    ynh_app_setting_set --app=$app --key=port --value=$port
+fi
+
 allowed_ips=$(ynh_app_setting_get --app=$app --key=allowed_ips)
 api_key=$(ynh_app_setting_get --app=$app --key=api_key)
 model=$(ynh_app_setting_get --app=$app --key=model)
