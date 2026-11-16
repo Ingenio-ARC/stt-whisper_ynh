@@ -81,10 +81,34 @@ ynh_script_progression --message="Compiling whisper.cpp (this may take a few min
 
 tmp_whisper=$(mktemp -d)
 git clone --depth 1 --branch v1.7.4 https://github.com/ggerganov/whisper.cpp.git "$tmp_whisper"
-cd "$tmp_whisper"
-make -j$(nproc) main
-cp main "$install_dir/whisper/main"
-cd /
+
+whisper_bin=""
+# Legacy Makefile with a 'main' target (older releases)
+if [ -f "$tmp_whisper/Makefile" ] && grep -qE "^main[[:space:]]*:" "$tmp_whisper/Makefile"; then
+    (cd "$tmp_whisper" && make -j"$(nproc)" main) && whisper_bin="$tmp_whisper/main"
+fi
+
+# CMake build (newer releases): binary is build/bin/whisper-cli (or main on older tags)
+if [ -z "$whisper_bin" ]; then
+    (cmake -S "$tmp_whisper" -B "$tmp_whisper/build" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DWHISPER_BUILD_TESTS=OFF \
+        -DWHISPER_BUILD_SERVER=OFF \
+        && cmake --build "$tmp_whisper/build" --config Release -j "$(nproc)")
+    for candidate in whisper-cli main; do
+        if [ -f "$tmp_whisper/build/bin/$candidate" ]; then
+            whisper_bin="$tmp_whisper/build/bin/$candidate"
+            break
+        fi
+    done
+fi
+
+if [ -z "$whisper_bin" ]; then
+    rm -rf "$tmp_whisper"
+    ynh_die --message="Could not compile whisper.cpp (no binary produced)"
+fi
+
+cp "$whisper_bin" "$install_dir/whisper/main"
 rm -rf "$tmp_whisper"
 
 #=================================================

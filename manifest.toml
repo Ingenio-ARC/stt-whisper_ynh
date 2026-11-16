@@ -71,7 +71,7 @@ ram.runtime = "50M"
     [resources.install_dir]
 
     [resources.apt]
-    packages = ["ffmpeg", "python3-venv", "python3-pip", "build-essential", "git"]
+    packages = ["ffmpeg", "python3-venv", "python3-pip", "build-essential", "cmake", "git"]
 
     [resources.permissions]
     main.url = "/"
