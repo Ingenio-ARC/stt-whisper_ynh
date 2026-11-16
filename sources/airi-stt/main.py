@@ -87,6 +87,43 @@ def run_ffmpeg(input_path: Path, output_path: Path, denoise: bool = False):
         )
 
 
+def _segment_span_ms(offsets) -> tuple:
+    """offsets de whisper.cpp: en versiones recientes es un dict {from, to};
+    en otras es una lista [from, to] en ms."""
+    if isinstance(offsets, dict):
+        try:
+            return float(offsets.get("from") or 0), float(offsets.get("to") or 0)
+        except (TypeError, ValueError):
+            return 0.0, 0.0
+    try:
+        if isinstance(offsets, (list, tuple)) and len(offsets) >= 2:
+            return float(offsets[0] or 0), float(offsets[1] or 0)
+    except (TypeError, ValueError):
+        pass
+    return 0.0, 0.0
+
+
+def _token_plogs(tokens) -> list:
+    """Log-probabilidades por token.
+
+    whisper.cpp >=1.7.x expone 'p' (probabilidad); 'plog' solo en algunas
+    versiones/modos. Derivamos: plog = log(p), confianza = exp(mean(plog))
+    = media geometrica de las probabilidades de token.
+    """
+    out = []
+    for t in tokens:
+        if not isinstance(t, dict):
+            continue
+        pl = t.get("plog")
+        if isinstance(pl, (int, float)):
+            out.append(pl)
+            continue
+        p = t.get("p")
+        if isinstance(p, (int, float)) and p > 0:
+            out.append(math.log(p))
+    return out
+
+
 def _exp_mean_plog(plogs: list) -> Optional[float]:
     """Probabilidad media geometrica (0-1) de una lista de log-probabilidades."""
     vals = [p for p in plogs if isinstance(p, (int, float))]
@@ -127,22 +164,25 @@ def _parse_whisper_json(json_path: Path, threshold: float) -> dict:
     for seg in segments:
         if not isinstance(seg, dict):
             continue
-        seg_text = str(seg.get("text", "")).strip()
-        offsets = seg.get("offsets") or [0, 0]
-        start_s = float(offsets[0] or 0) / 1000.0 if len(offsets) > 0 else 0.0
-        seg_end_ms = float(offsets[1]) if len(offsets) > 1 else 0.0
-        end_ms = max(end_ms, seg_end_ms)
-        tokens = seg.get("tokens") or []
-        plogs = [t.get("plog") for t in tokens if isinstance(t, dict)]
-        all_plogs.extend(plogs)
-        conf = _exp_mean_plog(plogs)
-        seg_rows.append({
-            "start_s": round(start_s, 3),
-            "end_s": round(seg_end_ms / 1000.0, 3),
-            "text": seg_text,
-            "confidence": round(conf, 4) if conf is not None else None,
-            "low_confidence": (conf < threshold) if conf is not None else None,
-        })
+        try:
+            seg_text = str(seg.get("text", "")).strip()
+            seg_start_ms, seg_end_ms = _segment_span_ms(seg.get("offsets"))
+            end_ms = max(end_ms, seg_end_ms)
+            plogs = _token_plogs(seg.get("tokens") or [])
+            all_plogs.extend(plogs)
+            conf = _exp_mean_plog(plogs)
+            seg_rows.append({
+                "start_s": round(seg_start_ms / 1000.0, 3),
+                "end_s": round(seg_end_ms / 1000.0, 3),
+                "text": seg_text,
+                "confidence": round(conf, 4) if conf is not None else None,
+                "low_confidence": (conf < threshold) if conf is not None else None,
+            })
+        except Exception:
+            logger.warning(
+                "Segmento STT no parseable, se omite: %s", type(seg).__name__,
+                exc_info=True,
+            )
 
     result["confidence_available"] = True
     result["segments"] = seg_rows
