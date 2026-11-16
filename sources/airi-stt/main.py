@@ -204,6 +204,8 @@ async def transcribe(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
+    model = Path(CONFIG["whisper"]["model_path"])
+
     temp_dir = Path(tempfile.mkdtemp(prefix="stt-", dir=CONFIG["app"]["temp_dir"]))
     try:
         input_path = temp_dir / file.filename

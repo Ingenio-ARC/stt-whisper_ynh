@@ -106,7 +106,7 @@ ynh_systemd_action --service_name=$app --action="start" --line_match="Applicatio
 
 chown -R $app:$app "$install_dir"
 
-if [ "$is_public" -eq 1 ]; then
+if [ "$is_public" = "1" ] || [ "$is_public" = "true" ]; then
     ynh_permission_update --permission="main" --add="visitors"
 else
     ynh_permission_update --permission="main" --add="all_users"
