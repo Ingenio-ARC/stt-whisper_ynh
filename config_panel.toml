@@ -1,0 +1,10 @@
+version = "1.0"
+
+[main]
+name = "STT Whisper configuration"
+    [main.security]
+    name = "Security"
+
+        [main.security.api_key]
+        ask = "API key (write empty = keep current value)"
+        type = "string"

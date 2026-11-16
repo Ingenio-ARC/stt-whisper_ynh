@@ -17,8 +17,24 @@ if [ -z "$port" ]; then
     ynh_app_setting_set --app=$app --key=port --value=$port
 fi
 
-allowed_ips=$(ynh_app_setting_get --app=$app --key=allowed_ips)
 api_key=$(ynh_app_setting_get --app=$app --key=api_key)
+
+# Never lose an existing key: recover it from config.yml, only generate if truly absent
+if [ -z "$api_key" ] && [ -f "$install_dir/config.yml" ]; then
+    api_key=$(grep '^  api_key:' "$install_dir/config.yml" | head -n1 | sed 's/.*"\(.*\)".*/\1/')
+fi
+if [ -z "$api_key" ]; then
+    api_key=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+fi
+ynh_app_setting_set --app=$app --key=api_key --value="$api_key"
+
+# Same for allowed_ips: recover from config.yml if the setting is empty
+allowed_ips=$(ynh_app_setting_get --app=$app --key=allowed_ips)
+if [ -z "$allowed_ips" ] && [ -f "$install_dir/config.yml" ]; then
+    allowed_ips=$(grep '^  allowed_ips:' "$install_dir/config.yml" | head -n1 | sed 's/.*"\(.*\)".*/\1/')
+fi
+allowed_ips=${allowed_ips:-"127.0.0.1,::1"}
+
 model=$(ynh_app_setting_get --app=$app --key=model)
 language=$(ynh_app_setting_get --app=$app --key=language)
 is_public=$(ynh_app_setting_get --app=$app --key=is_public)
@@ -27,11 +43,6 @@ max_file_size_mb=25
 threads=4
 beam_size=5
 host="127.0.0.1"
-
-if [ -z "$api_key" ]; then
-    api_key=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-    ynh_app_setting_set --app=$app --key=api_key --value=$api_key
-fi
 
 case "$model" in
     tiny) model_file="ggml-tiny.bin" ;;

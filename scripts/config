@@ -1,0 +1,16 @@
+#!/bin/bash
+
+source /usr/share/yunohost/helpers
+
+ynh_abort_if_errors
+
+CONFIG_FILE="/var/www/$app/config.yml"
+
+# Custom setter for the api_key property of the config panel.
+# Applies to config.yml (what the app reads) AND persists as app setting.
+set__api_key() {
+    local new_key="${api_key:-$1}"
+    [ -n "$new_key" ] || return 0
+    sed -i "s|^  api_key: .*|  api_key: \"$new_key\"|" "$CONFIG_FILE"
+    ynh_app_setting_set --app=$app --key=api_key --value="$new_key"
+}

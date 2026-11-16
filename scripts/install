@@ -45,6 +45,9 @@ if [ -z "$api_key" ]; then
     api_key=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 fi
 
+# Persist the key as an app setting (used by the config panel / future upgrades)
+ynh_app_setting_set --app=$app --key=api_key --value="$api_key"
+
 case "$model" in
     tiny) model_file="ggml-tiny.bin" ;;
     base) model_file="ggml-base.bin" ;;
