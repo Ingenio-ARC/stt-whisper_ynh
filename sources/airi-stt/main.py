@@ -114,7 +114,11 @@ def run_whisper(wav_path: Path, language: Optional[str] = None, translate: bool 
 
     logger.info("Transcribing with whisper.cpp: %s", wav_path.name)
     try:
-        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        env = os.environ.copy()
+        libdir = str(binary.parent)
+        existing_ld = env.get("LD_LIBRARY_PATH")
+        env["LD_LIBRARY_PATH"] = libdir + (":" + existing_ld if existing_ld else "")
+        subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
     except subprocess.CalledProcessError as exc:
         logger.error("whisper.cpp failed: %s", exc.stderr)
         raise HTTPException(

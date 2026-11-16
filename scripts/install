@@ -95,6 +95,7 @@ fi
 if [ -z "$whisper_bin" ]; then
     (cmake -S "$tmp_whisper" -B "$tmp_whisper/build" \
         -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
         -DWHISPER_BUILD_TESTS=OFF \
         -DWHISPER_BUILD_SERVER=OFF \
         && cmake --build "$tmp_whisper/build" --config Release -j "$(nproc)")
@@ -112,6 +113,10 @@ if [ -z "$whisper_bin" ]; then
 fi
 
 cp "$whisper_bin" "$install_dir/whisper/main"
+
+# If shared libs were produced anyway, bundle them next to the binary (keep symlinks)
+find "$tmp_whisper" -name "*.so*" -exec cp -a {} "$install_dir/whisper/" \; 2>/dev/null || true
+
 rm -rf "$tmp_whisper"
 
 #=================================================

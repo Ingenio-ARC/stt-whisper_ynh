@@ -58,6 +58,37 @@ ynh_systemd_action --service_name=$app --action="stop"
 ynh_script_progression --message="Upgrading source files..." --weight=1
 cp -a "$YNH_APP_BASEDIR/sources/airi-stt/." "$install_dir/app/"
 
+# Rebuild whisper.cpp if the existing binary is missing or cannot load its libraries
+if [ ! -x "$install_dir/whisper/main" ] || ldd "$install_dir/whisper/main" 2>/dev/null | grep -q "not found"; then
+    ynh_script_progression --message="Rebuilding whisper.cpp (binary broken or missing)..." --weight=15
+
+    tmp_whisper=$(mktemp -d)
+    git clone --depth 1 --branch v1.7.4 https://github.com/ggerganov/whisper.cpp.git "$tmp_whisper"
+
+    (cmake -S "$tmp_whisper" -B "$tmp_whisper/build" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DWHISPER_BUILD_TESTS=OFF \
+        -DWHISPER_BUILD_SERVER=OFF \
+        && cmake --build "$tmp_whisper/build" --config Release -j "$(nproc)")
+
+    whisper_bin=""
+    for candidate in whisper-cli main; do
+        if [ -f "$tmp_whisper/build/bin/$candidate" ]; then
+            whisper_bin="$tmp_whisper/build/bin/$candidate"
+            break
+        fi
+    done
+    if [ -z "$whisper_bin" ]; then
+        rm -rf "$tmp_whisper"
+        ynh_die --message="Could not rebuild whisper.cpp"
+    fi
+
+    cp "$whisper_bin" "$install_dir/whisper/main"
+    find "$tmp_whisper" -name "*.so*" -exec cp -a {} "$install_dir/whisper/" \; 2>/dev/null || true
+    rm -rf "$tmp_whisper"
+fi
+
 ynh_script_progression --message="Upgrading Python dependencies..." --weight=3
 "$install_dir/venv/bin/pip" install --upgrade pip
 "$install_dir/venv/bin/pip" install -r "$install_dir/app/requirements.txt"

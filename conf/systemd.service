@@ -12,6 +12,7 @@ Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
 Environment=CONFIG_PATH=/var/www/__APP__/config.yml
+Environment=LD_LIBRARY_PATH=/var/www/__APP__/whisper
 StandardOutput=append:/var/log/__APP__/app.log
 StandardError=append:/var/log/__APP__/app.log
 
