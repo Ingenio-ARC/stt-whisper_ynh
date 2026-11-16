@@ -42,7 +42,7 @@ ram.runtime = "50M"
     ask.en = "Comma-separated list of allowed IP addresses"
     ask.es = "Lista de IPs permitidas separadas por comas"
     type = "string"
-    default = "127.0.0.1,::1,179.60.190.114"
+    default = "127.0.0.1,::1"
 
     [install.api_key]
     ask.en = "API key for the STT endpoint (leave empty to auto-generate a secure key)"
