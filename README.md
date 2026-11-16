@@ -49,7 +49,7 @@ Ideal para integrar con flujos de N8N: recibe un archivo de audio (MP3, OGG, WAV
 }
 ```
 
-- `confidence` (0–1): `exp(media(plog))` de los tokens — equivalente al `avg_logprob` de la API de OpenAI, pero como probabilidad. `>= 0.85` buena; `< 0.6` sospechosa (umbral configurable: `confidence_threshold`).
+- `confidence` (0–1): media geométrica de las probabilidades de token — equivalente al `avg_logprob` de la API de OpenAI, invertido a probabilidad. `>= 0.85` buena; `< 0.6` sospechosa (umbral configurable: `confidence_threshold`). En whisper.cpp 1.7.x los tokens traen `p` (no `plog`); se deriva `log(p)`. Versiones con `plog` usan `plog` directo.
 - `low_confidence`: `true` si el confidence global o algún segmento cae bajo el umbral. Es la señal para que el flujo (N8N) le pida al usuario confirmar datos clave.
 - `confidence_available` / `confidence` = `null`: el JSON de whisper.cpp no llegó (fallo raro); el texto viene del `.txt` de respaldo.
 - Form fields extra: `prompt` (string opcional) sobreescribe el `initial_prompt` del config para esa petición.
