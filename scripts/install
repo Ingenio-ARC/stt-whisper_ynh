@@ -18,6 +18,10 @@ api_key=$YNH_APP_ARG_API_KEY
 model=$YNH_APP_ARG_MODEL
 language=$YNH_APP_ARG_LANGUAGE
 
+# Robust defaults for optional fields
+allowed_ips=${allowed_ips:-"127.0.0.1,::1"}
+language=${language:-"auto"}
+
 #=================================================
 # SET VARIABLES
 #=================================================
