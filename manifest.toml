@@ -9,9 +9,9 @@ version = "1.0~ynh1"
 maintainers = ["Airi Team"]
 
 upstream.license = "MIT"
-upstream.website = "https://github.com/Ingenio-ARC/STT-WHISPER"
+upstream.website = "https://github.com/Ingenio-ARC/stt-whisper_ynh"
 
-code = "https://github.com/Ingenio-ARC/STT-WHISPER"
+code = "https://github.com/Ingenio-ARC/stt-whisper_ynh"
 license = "MIT"
 
 [integration]
