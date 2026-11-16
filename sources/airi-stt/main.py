@@ -2,6 +2,8 @@
 import os
 import sys
 import time
+import math
+import json
 import shutil
 import logging
 import tempfile
@@ -85,11 +87,92 @@ def run_ffmpeg(input_path: Path, output_path: Path, denoise: bool = False):
         )
 
 
-def run_whisper(wav_path: Path, language: Optional[str] = None, translate: bool = False) -> str:
+def _exp_mean_plog(plogs: list) -> Optional[float]:
+    """Probabilidad media geometrica (0-1) de una lista de log-probabilidades."""
+    vals = [p for p in plogs if isinstance(p, (int, float))]
+    if not vals:
+        return None
+    try:
+        return math.exp(sum(vals) / len(vals))
+    except (ValueError, OverflowError):
+        return None
+
+
+def _parse_whisper_json(json_path: Path, threshold: float) -> dict:
+    """Lee el JSON completo de whisper.cpp (-ojf) y calcula metricas de confianza.
+
+    whisper.cpp expone por token: p (probabilidad) y plog (log-probabilidad).
+    confidence = exp(mean(plog))  [equivalente al avg_logprob de la API OpenAI].
+    """
+    result = {
+        "text": "",
+        "segments": [],
+        "confidence": None,
+        "min_segment_confidence": None,
+        "low_confidence": None,
+        "n_segments": None,
+        "duration_s": None,
+        "confidence_available": False,
+    }
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError, TypeError):
+        return result
+
+    segments = data.get("transcription") or []
+    all_plogs = []
+    seg_rows = []
+    end_ms = 0
+    for seg in segments:
+        if not isinstance(seg, dict):
+            continue
+        seg_text = str(seg.get("text", "")).strip()
+        offsets = seg.get("offsets") or [0, 0]
+        start_s = float(offsets[0] or 0) / 1000.0 if len(offsets) > 0 else 0.0
+        seg_end_ms = float(offsets[1]) if len(offsets) > 1 else 0.0
+        end_ms = max(end_ms, seg_end_ms)
+        tokens = seg.get("tokens") or []
+        plogs = [t.get("plog") for t in tokens if isinstance(t, dict)]
+        all_plogs.extend(plogs)
+        conf = _exp_mean_plog(plogs)
+        seg_rows.append({
+            "start_s": round(start_s, 3),
+            "end_s": round(seg_end_ms / 1000.0, 3),
+            "text": seg_text,
+            "confidence": round(conf, 4) if conf is not None else None,
+            "low_confidence": (conf < threshold) if conf is not None else None,
+        })
+
+    result["confidence_available"] = True
+    result["segments"] = seg_rows
+    result["n_segments"] = len(seg_rows)
+    result["text"] = " ".join(s["text"] for s in seg_rows).strip()
+    result["confidence"] = round(_exp_mean_plog(all_plogs), 4) if all_plogs else None
+    seg_confs = [s["confidence"] for s in seg_rows if s["confidence"] is not None]
+    result["min_segment_confidence"] = round(min(seg_confs), 4) if seg_confs else None
+    result["duration_s"] = round(end_ms / 1000.0, 3)
+    seg_lows = [s["low_confidence"] for s in seg_rows if s["low_confidence"] is not None]
+    overall = result["confidence"]
+    if seg_lows or overall is not None:
+        result["low_confidence"] = bool(
+            any(seg_lows) or (overall is not None and overall < threshold)
+        )
+    return result
+
+
+def run_whisper(
+    wav_path: Path,
+    language: Optional[str] = None,
+    translate: bool = False,
+    prompt: Optional[str] = None,
+) -> dict:
     binary = Path(CONFIG["whisper"]["binary_path"])
     model = Path(CONFIG["whisper"]["model_path"])
     threads = int(CONFIG["whisper"].get("threads", 4))
     beam_size = int(CONFIG["whisper"].get("beam_size", 5))
+    threshold = float(CONFIG["whisper"].get("confidence_threshold", 0.60))
+    initial_prompt = str(CONFIG["whisper"].get("initial_prompt", "") or "")
 
     if not binary.exists():
         logger.error("Whisper binary not found: %s", binary)
@@ -98,6 +181,7 @@ def run_whisper(wav_path: Path, language: Optional[str] = None, translate: bool 
         logger.error("Whisper model not found: %s", model)
         raise HTTPException(status_code=500, detail="Whisper model not found")
 
+    out_base = wav_path.parent / wav_path.stem
     cmd = [
         str(binary),
         "-m", str(model),
@@ -106,7 +190,23 @@ def run_whisper(wav_path: Path, language: Optional[str] = None, translate: bool 
         "-bs", str(beam_size),
         "--no-timestamps",
         "--output-txt",
+        "--output-json-full",
+        "-of", str(out_base),
     ]
+    # max_context=0 desactiva el condicionado en texto previo (msgs breves e
+    # independientes: evita repeticiones/alucinaciones en bucle)
+    max_context = CONFIG["whisper"].get("max_context")
+    if max_context is not None:
+        cmd += ["--max-context", str(int(max_context))]
+
+    # Form markers no son strings cuando la funcion se llama directamente
+    # desde otro endpoint (sin inyeccion de FastAPI)
+    if not isinstance(prompt, str):
+        prompt = ""
+    effective_prompt = (prompt or initial_prompt).strip()
+    if effective_prompt:
+        cmd += ["--prompt", effective_prompt]
+
     if language and language != "auto":
         cmd += ["-l", language]
     if translate:
@@ -126,19 +226,29 @@ def run_whisper(wav_path: Path, language: Optional[str] = None, translate: bool 
             detail=f"Transcription failed: {exc.stderr[:500]}",
         )
 
-    output_file = wav_path.with_suffix(wav_path.suffix + ".txt")
-    if not output_file.exists():
-        output_file = wav_path.parent / (wav_path.name + ".txt")
-    if not output_file.exists():
-        logger.error("Whisper output file not found")
-        raise HTTPException(status_code=500, detail="Transcription output missing")
+    json_path = Path(str(out_base) + ".json")
+    txt_path = Path(str(out_base) + ".txt")
 
-    text = output_file.read_text(encoding="utf-8").strip()
-    try:
-        output_file.unlink()
-    except OSError:
-        pass
-    return text
+    metrics = _parse_whisper_json(json_path, threshold)
+    metrics["confidence_threshold"] = threshold
+    if not metrics["confidence_available"]:
+        # Sin JSON usable: texto desde .txt, sin metricas de confianza
+        logger.warning("Whisper JSON output missing or invalid, falling back to txt")
+        if txt_path.exists():
+            metrics["text"] = txt_path.read_text(encoding="utf-8").strip()
+
+    logger.info(
+        "STT metrics: conf=%s low=%s n_seg=%s dur=%ss",
+        metrics["confidence"], metrics["low_confidence"],
+        metrics["n_segments"], metrics["duration_s"],
+    )
+
+    for p in (json_path, txt_path):
+        try:
+            p.unlink()
+        except OSError:
+            pass
+    return metrics
 
 
 @asynccontextmanager
@@ -199,6 +309,7 @@ async def transcribe(
     language: Optional[str] = Form(None),
     denoise: bool = Form(False),
     translate: bool = Form(False),
+    prompt: Optional[str] = Form(None),
 ):
     start = time.time()
     if not file.filename:
@@ -214,16 +325,28 @@ async def transcribe(
 
         wav_path = temp_dir / "audio.wav"
         run_ffmpeg(input_path, wav_path, denoise=denoise)
-        text = run_whisper(wav_path, language=language, translate=translate)
+        lang = language or str(CONFIG["whisper"].get("language", "auto") or "auto")
+        result = run_whisper(
+            wav_path, language=lang, translate=translate, prompt=prompt,
+        )
 
         processing_time_ms = int((time.time() - start) * 1000)
         return {
-            "text": text,
-            "language": language or "auto",
+            "text": result["text"],
+            "language": lang,
             "model": model.name,
             "processing_time_ms": processing_time_ms,
             "denoise": denoise,
             "translate": translate,
+            # --- metricas de confianza (whisper.cpp -ojf) ---
+            "n_segments": result["n_segments"],
+            "duration_s": result["duration_s"],
+            "confidence": result["confidence"],
+            "min_segment_confidence": result["min_segment_confidence"],
+            "low_confidence": result["low_confidence"],
+            "confidence_threshold": result["confidence_threshold"],
+            "confidence_available": result["confidence_available"],
+            "segments": result["segments"],
         }
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -236,8 +359,9 @@ async def transcribe_plain(
     language: Optional[str] = Form(None),
     denoise: bool = Form(False),
     translate: bool = Form(False),
+    prompt: Optional[str] = Form(None),
 ):
-    result = await transcribe(request, file, language, denoise, translate)
+    result = await transcribe(request, file, language, denoise, translate, prompt)
     return result["text"]
 
 

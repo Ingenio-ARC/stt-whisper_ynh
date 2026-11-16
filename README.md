@@ -11,14 +11,62 @@ Ideal para integrar con flujos de N8N: recibe un archivo de audio (MP3, OGG, WAV
 - Seguridad por **whitelist de IPs** + **API key**.
 - Límite de archivo: 25 MB (configurable).
 - Endpoints JSON y texto plano para facilitar N8N.
+- **Métricas de confianza por segmento** (`confidence`, `low_confidence`) para que el flujo de IA sepa cuándo confirmar datos.
+- **Prompt inicial configurable** (`initial_prompt`) que sesga vocabulario/formato (p. ej. horarios hablados en español).
 - Tests automatizados con métrica WER.
 - Reducción de ruido opcional (`?denoise=true`) — Fase 2.
 
 ## Endpoints
 
 - `GET /health` — estado del servicio.
-- `POST /transcribe` — transcribe audio y devuelve JSON.
-- `POST /transcribe/plain` — transcribe audio y devuelve texto plano.
+- `POST /transcribe` — transcribe audio y devuelve JSON (con métricas de confianza).
+- `POST /transcribe/plain` — transcribe audio y devuelve texto plano (sin métricas).
+
+## Respuesta de /transcribe
+
+```json
+{
+  "text": "Si, decías si puedes eliminar ambas citas del 16, la de las 8 y media y la de las 9.",
+  "language": "es",
+  "model": "ggml-base.bin",
+  "processing_time_ms": 1234,
+  "n_segments": 1,
+  "duration_s": 6.2,
+  "confidence": 0.9262,
+  "min_segment_confidence": 0.9262,
+  "low_confidence": false,
+  "confidence_threshold": 0.6,
+  "confidence_available": true,
+  "segments": [
+    {
+      "start_s": 0.0,
+      "end_s": 6.2,
+      "text": "Si, decías si puedes eliminar ambas citas del 16, ...",
+      "confidence": 0.9262,
+      "low_confidence": false
+    }
+  ]
+}
+```
+
+- `confidence` (0–1): `exp(media(plog))` de los tokens — equivalente al `avg_logprob` de la API de OpenAI, pero como probabilidad. `>= 0.85` buena; `< 0.6` sospechosa (umbral configurable: `confidence_threshold`).
+- `low_confidence`: `true` si el confidence global o algún segmento cae bajo el umbral. Es la señal para que el flujo (N8N) le pida al usuario confirmar datos clave.
+- `confidence_available` / `confidence` = `null`: el JSON de whisper.cpp no llegó (fallo raro); el texto viene del `.txt` de respaldo.
+- Form fields extra: `prompt` (string opcional) sobreescribe el `initial_prompt` del config para esa petición.
+
+## Calidad de la transcripción
+
+Parámetros en `config.yml` (claves nuevas, v1.0~ynh6):
+
+| Clave | Default | Para qué |
+|---|---|---|
+| `whisper.language` | `auto` | Para audios siempre en un idioma fijo, usa `es`: en clips breves la autodetección falla a veces. |
+| `whisper.max_context` | `0` | Sin contexto entre segmentos: evita bucles de repetición/alucinación en audios breves e independientes. |
+| `whisper.initial_prompt` | (horarios) | Sesga el formato/vocabulario al inicio de la decodificación: `Horarios de citas: ocho y media, 8:30, nueve y cuarto, 9:15...` |
+| `whisper.confidence_threshold` | `0.60` | Debajo de este confidence (global o por segmento) se marca `low_confidence`. |
+| `whisper.beam_size` | `5` | Beam search: mejor calidad que greedy (0), a costa de algo más de CPU. |
+
+Calidad del modelo: `base` es rápido pero limitado para español y números hablados. Si el hardware lo permite, `small` (~142 MB) mejora mucho los horarios y nombres: descarga `ggml-small.bin` en `models/`, apunta `whisper.model_path` y reinicia el servicio.
 
 ## Instalación en YunoHost
 

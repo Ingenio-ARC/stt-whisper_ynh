@@ -14,3 +14,19 @@ set__api_key() {
     sed -i "s|^  api_key: .*|  api_key: \"$new_key\"|" "$CONFIG_FILE"
     ynh_app_setting_set --app=$app --key=api_key --value="$new_key"
 }
+
+# Fallback getter: si el app setting no existe (installs antiguos, o el upgrade
+# corrio con un paquete cacheado viejo), recupera el valor del config.yml y lo
+# persiste. Sin esto el webadmin muestra el error "Config panel question
+# 'api_key' should be initialized with a value during install or upgrade."
+get__api_key() {
+    local value
+    value="$(ynh_app_setting_get --app=$app --key=api_key)"
+    if [ -z "$value" ] && [ -f "$CONFIG_FILE" ]; then
+        value="$(grep -m1 '^  api_key:' "$CONFIG_FILE" | sed 's/.*"\(.*\)".*/\1/')"
+        if [ -n "$value" ]; then
+            ynh_app_setting_set --app=$app --key=api_key --value="$value"
+        fi
+    fi
+    echo -n "$value"
+}

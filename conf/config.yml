@@ -17,5 +17,14 @@ whisper:
   threads: __THREADS__
   beam_size: __BEAM_SIZE__
 
+  # Audios breves e independientes: sin contexto entre segmentos
+  # (evita repeticiones/alucinaciones en bucle en clips cortos)
+  max_context: 0
+  # Prompt inicial que sesga vocabulario y formato (homofonos/numeros hablados
+  # en espanol: "ocho y media" -> "8:30", etc.). Editalo al negocio si quieres.
+  initial_prompt: "Horarios de citas: ocho y media, 8:30, nueve y cuarto, 9:15, diez en punto"
+  # Confianza media (exp(mean plog), 0-1) por debajo de este valor => low_confidence
+  confidence_threshold: 0.60
+
 preprocessing:
   denoise: false
